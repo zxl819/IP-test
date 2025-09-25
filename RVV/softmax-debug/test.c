@@ -241,9 +241,9 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     dst = dst_orig;
 
     // 调试打印
-    dbg_print_line("Final results:\n");
-    for (size_t i = 0; i < n; i++) {
-        dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
-        dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
-    }
+    // dbg_print_line("Final results:\n");
+    // for (size_t i = 0; i < n; i++) {
+    //     dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
+    //     dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
+    // }
 }
