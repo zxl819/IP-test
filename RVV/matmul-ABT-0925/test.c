@@ -78,14 +78,6 @@ static inline int matmul_batch1(const int8_t *A, const int8_t *B, int32_t *C,
       //mint32_t acc1;
       //initialize acc using C
       mint32_t acc1 = mlc_m(C + i * n + j, ldc_bytes);
-  //     for (int kk = 0; kk < k; kk += tile_k) {
-  //       tile_k = msettilek(k - kk);
-  //       mint8_t tr0 = mla_m(A + i * k + kk, lda_bytes);
-  //       //mint8_t tr1 =mlbt_m(B + kk * n + j, ldb_bytes);
-  //       mint8_t tr1 = mlb_m(B + kk * n + j, ldb_bytes);
-  //       //acc = mqma_mm(acc, tr0, tr1);
-  //       acc1 = mqma_b_mm(acc1, tr0, tr1);
-  //     }
       msc_m(acc1, C + i * n + j, ldc_bytes);
      }
    }
