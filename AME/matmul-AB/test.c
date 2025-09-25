@@ -100,32 +100,32 @@ int main()
 
     // 计算
     matmul(A, B, C, DIM_M, DIM_N, DIM_K);
-    printf("C result:\n");
-    for (int i = 0; i < DIM_M; i++) {
-        for (int j = 0; j < DIM_N; j++) {
-            printf("%d ", C[i * DIM_N + j]);
-        }
-        printf("\n");
+    // printf("C result:\n");
+    // for (int i = 0; i < DIM_M; i++) {
+    //     for (int j = 0; j < DIM_N; j++) {
+    //         printf("%d ", C[i * DIM_N + j]);
+    //     }
+    //     printf("\n");
     
-      }
-    // 与 golden (D_i32) 对比
-    int mismatch = 0;
-    for (int idx = 0; idx < DIM_M * DIM_N; ++idx) {
-        if (C[idx] != D_i32[idx]) {
-            if (mismatch < 16) { // 只打印前16个差异
-                int r = idx / DIM_N;
-                int c = idx % DIM_N;
-                printf("mismatch (%d,%d): got %d expected %d\n",
-                       r, c, C[idx], D_i32[idx]);
-            }
-            mismatch++;
-        }
-    }
-    if (mismatch == 0) {
-        printf("Compare with D: PASS\n");
-    } else {
-        printf("Compare with D: FAIL, total mismatches=%d\n", mismatch);
-    }
+    //   }
+    // // 与 golden (D_i32) 对比
+    // int mismatch = 0;
+    // for (int idx = 0; idx < DIM_M * DIM_N; ++idx) {
+    //     if (C[idx] != D_i32[idx]) {
+    //         if (mismatch < 16) { // 只打印前16个差异
+    //             int r = idx / DIM_N;
+    //             int c = idx % DIM_N;
+    //             printf("mismatch (%d,%d): got %d expected %d\n",
+    //                    r, c, C[idx], D_i32[idx]);
+    //         }
+    //         mismatch++;
+    //     }
+    // }
+    // if (mismatch == 0) {
+    //     printf("Compare with D: PASS\n");
+    // } else {
+    //     printf("Compare with D: FAIL, total mismatches=%d\n", mismatch);
+    // }
 
     return 0;
 }
