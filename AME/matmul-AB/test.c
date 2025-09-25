@@ -58,12 +58,13 @@ static inline int matmul_batch1(const int8_t *A, const int8_t *B, int32_t *C,
         mint8_t tr0 = mla_m(A + i * k + kk, lda_bytes);
         //mint8_t tr1 =mlbt_m(B + kk * n + j, ldb_bytes); //按列取转置
         //mint8_t tr1 = mlb_m(B + kk * n + j, ldb_bytes); //按列取
-        mint8_t tr1 = mlbt_m(B + j * n + kk, ldb_bytes); //按行取
+        //mint8_t tr1 = mlb_m(B + j * k + kk, ldb_bytes); //按行取
+        mint8_t tr1 = mlbt_m(B + kk * k + j, ldb_bytes); //按行取
         //acc = mqma_mm(acc, tr0, tr1);
         acc1 = mqma_b_mm(acc1, tr0, tr1);
         //printf("debug: kk=%d remaining=%d tile_k=%d\n", kk, k - kk, tile_k);
       }
-      msct_m(acc1, C + i * n + j, ldc_bytes);
+      msc_m(acc1, C + i * n + j, ldc_bytes);
     }
     //printf("debug: i=%d remaining=%d tile_m=%d\n", i, m - i, tile_m);
   }
