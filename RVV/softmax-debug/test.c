@@ -119,11 +119,28 @@ int main(){
 void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
 {
     // m1 常量
-    const size_t vl1 = __riscv_vsetvl_e32m1(1);
-    vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u, vl1));
-    vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x40000000u, vl1));   // 2.0f
-    vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x322BCC77u, vl1));   // 1e-8f
-    vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0xFF800000u, vl1));   // -inf
+    // const size_t vl1 = __riscv_vsetvl_e32m1(1);
+    // vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u, vl1));
+    // vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x40000000u, vl1));   // 2.0f
+    // vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x322BCC77u, vl1));   // 1e-8f
+    // vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0xFF800000u, vl1));   // -inf
+    // 位常量（与 test_VLEN512 风格一致）
+    const uint32_t BITS_NEG_INF = 0xFF800000u; // -inf
+    const uint32_t BITS_ILN2    = 0x3FB8AA3Bu; // 1/ln(2)
+    const uint32_t BITS_LN2_HI  = 0x3F317000u; // ln2 hi
+    const uint32_t BITS_LN2_LO  = 0x38800C00u; // ln2 lo
+    const uint32_t BITS_TWO     = 0x40000000u; // 2.0f
+    const uint32_t BITS_EPS     = 0x322BCC77u; // 1e-8f
+    // // e^r 的 8 阶多项式系数（Horner）
+    // const uint32_t C0 = 0x3F800000u, C1 = 0x3F800000u, C2 = 0x3F000000u;
+    // const uint32_t C3 = 0x3E2AAAABu, C4 = 0x3D2AAAABu, C5 = 0x3C088889u;
+    // const uint32_t C6 = 0x3AB60B61u, C7 = 0x3A1175D4u, C8 = 0x3926ED8Eu;
+
+    const size_t vl1 = __riscv_vsetvlmax_e32m1(); 
+    vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u,          vl1));
+    vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_TWO,    vl1));
+    vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_EPS,    vl1));
+    vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_NEG_INF,vl1));
 
     // m8 常量（通过位广播构造）
     const size_t vlm8 = __riscv_vsetvlmax_e32m8();
