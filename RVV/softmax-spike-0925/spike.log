@@ -1,0 +1,17 @@
+Final results:
+dst[0] bits: 0x3C84B86F
+golden[0] bits: 0x3C84B501
+dst[1] bits: 0x3E8FB683
+golden[1] bits: 0x3E8FB712
+dst[2] bits: 0x3E4DAE70
+golden[2] bits: 0x3E4DAF3F
+dst[3] bits: 0x3CD715D9
+golden[3] bits: 0x3CD711E0
+dst[4] bits: 0x3D8CA2D8
+golden[4] bits: 0x3D8CA14B
+dst[5] bits: 0x3D6A0D86
+golden[5] bits: 0x3D6A0AF3
+dst[6] bits: 0x3E0351B7
+golden[6] bits: 0x3E035140
+dst[7] bits: 0x3E63443A
+golden[7] bits: 0x3E63451D

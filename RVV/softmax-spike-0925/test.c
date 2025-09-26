@@ -106,12 +106,7 @@ uint32_t quick_dirty_vector_expf_no_scalar(float* dst, float* src, uint32_t max_
 
 int main(){
     //softmax_stable_rvv_fp32(dst,src,VLEN/32);
-    int a = 1;
-    int b = 2;
-    int c = a + b;
-    //softmax_stable_rvv_fp32(dst,src,N);
-
-    //softmax_stable_rvv_fp32(dst, (float*)src, N);
+    softmax_stable_rvv_fp32(dst, (float*)src, N);
     return 0;
 }
 
@@ -244,9 +239,9 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     dst = dst_orig;
 
     // 调试打印
-    // dbg_print_line("Final results:\n");
-    // for (size_t i = 0; i < n; i++) {
-    //     dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
-    //     dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
-    // }
+    dbg_print_line("Final results:\n");
+    for (size_t i = 0; i < n; i++) {
+        dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
+        dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
+    }
 }
