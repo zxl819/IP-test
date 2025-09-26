@@ -106,10 +106,10 @@ uint32_t quick_dirty_vector_expf_no_scalar(float* dst, float* src, uint32_t max_
 
 int main(){
     //softmax_stable_rvv_fp32(dst,src,VLEN/32);
-    int a = 1;
-    int b = 2;
-    int c = a + b;
-    //softmax_stable_rvv_fp32(dst,src,N);
+    // int a = 1;
+    // int b = 2;
+    // int c = a + b;
+    softmax_stable_rvv_fp32(dst,src,N);
 
     //softmax_stable_rvv_fp32(dst, (float*)src, N);
     return 0;
