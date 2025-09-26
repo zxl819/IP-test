@@ -106,7 +106,12 @@ uint32_t quick_dirty_vector_expf_no_scalar(float* dst, float* src, uint32_t max_
 
 int main(){
     //softmax_stable_rvv_fp32(dst,src,VLEN/32);
-    softmax_stable_rvv_fp32(dst, (float*)src, N);
+    // int a = 1;
+    // int b = 2;
+    // int c = a + b;
+    softmax_stable_rvv_fp32(dst,src,N);
+
+    //softmax_stable_rvv_fp32(dst, (float*)src, N);
     return 0;
 }
 
@@ -114,27 +119,61 @@ int main(){
 void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
 {
     // m1 常量
-    const size_t vl1 = __riscv_vsetvl_e32m1(1);
-    vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u, vl1));
-    vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x40000000u, vl1));   // 2.0f
-    vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x322BCC77u, vl1));   // 1e-8f
-    vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0xFF800000u, vl1));   // -inf
+    // const size_t vl1 = __riscv_vsetvl_e32m1(1);
+    // vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u, vl1));
+    // vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x40000000u, vl1));   // 2.0f
+    // vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0x322BCC77u, vl1));   // 1e-8f
+    // vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0xFF800000u, vl1));   // -inf
+    // 位常量（与 test_VLEN512 风格一致）
+    const uint32_t BITS_NEG_INF = 0xFF800000u; // -inf
+    const uint32_t BITS_ILN2    = 0x3FB8AA3Bu; // 1/ln(2)
+    const uint32_t BITS_LN2_HI  = 0x3F317000u; // ln2 hi
+    const uint32_t BITS_LN2_LO  = 0x38800C00u; // ln2 lo
+    const uint32_t BITS_TWO     = 0x40000000u; // 2.0f
+    const uint32_t BITS_EPS     = 0x322BCC77u; // 1e-8f
+    // // e^r 的 8 阶多项式系数（Horner）
+    // const uint32_t C0 = 0x3F800000u, C1 = 0x3F800000u, C2 = 0x3F000000u;
+    // const uint32_t C3 = 0x3E2AAAABu, C4 = 0x3D2AAAABu, C5 = 0x3C088889u;
+    // const uint32_t C6 = 0x3AB60B61u, C7 = 0x3A1175D4u, C8 = 0x3926ED8Eu;
+
+    const size_t vl1 = __riscv_vsetvlmax_e32m1(); 
+    vfloat32m1_t vzero1   = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(0u,          vl1));
+    vfloat32m1_t vtwo1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_TWO,    vl1));
+    vfloat32m1_t veps1    = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_EPS,    vl1));
+    vfloat32m1_t vneginf1 = __riscv_vreinterpret_v_u32m1_f32m1(__riscv_vmv_v_x_u32m1(BITS_NEG_INF,vl1));
 
     // m8 常量（通过位广播构造）
     const size_t vlm8 = __riscv_vsetvlmax_e32m8();
     vfloat32m8_t viln2_8   = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3FB8AA3Bu, vlm8)); // 1/ln2
     vfloat32m8_t vln2_hi_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F317000u, vlm8)); // ln2_hi
     vfloat32m8_t vln2_lo_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x38800C00u, vlm8)); // ln2_lo
-    // e^r 多项式系数（Horner，c0..c8）
-    vfloat32m8_t pc0_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F800000u, vlm8)); // 1
-    vfloat32m8_t pc1_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F800000u, vlm8)); // 1
-    vfloat32m8_t pc2_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F000000u, vlm8)); // 1/2
-    vfloat32m8_t pc3_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3E2AAAABu, vlm8)); // 1/6
-    vfloat32m8_t pc4_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3D2AAAABu, vlm8)); // 1/24
-    vfloat32m8_t pc5_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3C088889u, vlm8)); // 1/120
-    vfloat32m8_t pc6_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3AB60B61u, vlm8)); // 1/720
-    vfloat32m8_t pc7_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3A1175D4u, vlm8)); // 1/5040
-    vfloat32m8_t pc8_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3926ED8Eu, vlm8)); // 1/40320
+    // // e^r 多项式系数（Horner，c0..c8）
+    // vfloat32m8_t pc0_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F800000u, vlm8)); // 1
+    // vfloat32m8_t pc1_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F800000u, vlm8)); // 1
+    // vfloat32m8_t pc2_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3F000000u, vlm8)); // 1/2
+    // vfloat32m8_t pc3_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3E2AAAABu, vlm8)); // 1/6
+    // vfloat32m8_t pc4_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3D2AAAABu, vlm8)); // 1/24
+    // vfloat32m8_t pc5_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3C088889u, vlm8)); // 1/120
+    // vfloat32m8_t pc6_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3AB60B61u, vlm8)); // 1/720
+    // vfloat32m8_t pc7_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3A1175D4u, vlm8)); // 1/5040
+    // vfloat32m8_t pc8_8 = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(0x3926ED8Eu, vlm8)); // 1/40320
+    // 多项式系数表（C8..C0），只会占用前 9 个元素；后续用 vrgather.vx 广播
+    static const uint32_t coeff_bits[9] = {
+        0x3926ED8E, // C8
+        0x3A1175D4, // C7
+        0x3AB60B61, // C6
+        0x3C088889, // C5
+        0x3D2AAAAB, // C4
+        0x3E2AAAAB, // C3
+        0x3F000000, // C2
+        0x3F800000, // C1
+        0x3F800000  // C0
+    };
+    size_t vl_table = __riscv_vsetvl_e32m8(9);
+    vfloat32m8_t ptable = __riscv_vreinterpret_v_u32m8_f32m8(
+        __riscv_vle32_v_u32m8(coeff_bits, vl_table));
+    // 恢复最大 VL（后续 strip-mining 每块再设）
+    (void)vl_table;
 
     // Pass-1：全局最大（块内 m8→m1 归约，跨块累积到 m1）
     float* src_orig = src;
@@ -153,75 +192,74 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     uint32_t max_bits[1];
     __riscv_vse32_v_u32m1(max_bits, __riscv_vreinterpret_v_f32m1_u32m1(vmax1), vl1);
 
-    // Pass-2：计算 exp(x-max) 与总和
+      // Pass-2: exp(x-max) + sum
     vfloat32m1_t vsum1 = vzero1;
     float* dst_orig = dst;
-    size_t avl2 = n;
-    while (avl2 > 0) {
+    for (size_t avl2 = n; avl2 > 0; ) {
         size_t vl = __riscv_vsetvl_e32m8(avl2);
-
         vfloat32m8_t vx = __riscv_vle32_v_f32m8(src, vl);
-        vfloat32m8_t vmaxB = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(max_bits[0], vl));
+
+        // 减去 max
+        vfloat32m8_t vmaxB = __riscv_vreinterpret_v_u32m8_f32m8(
+            __riscv_vmv_v_x_u32m8(max_bits[0], vl));
         vx = __riscv_vfsub_vv_f32m8(vx, vmaxB, vl);
 
         // k = round(vx/ln2)
-        unsigned old_frm; asm volatile("csrr %0, frm" : "=r"(old_frm)); asm volatile("csrw frm, %0" :: "r"(0));
-        vfloat32m8_t vxiln2 = __riscv_vfmul_vv_f32m8(vx, viln2_8, vl);
-        vint32m8_t   vk     = __riscv_vfcvt_x_f_v_i32m8(vxiln2, vl);
+        unsigned old_frm; asm volatile("csrr %0, frm" : "=r"(old_frm));
+        asm volatile("csrw frm, %0" :: "r"(0)); // RNE
+        vint32m8_t vk = __riscv_vfcvt_x_f_v_i32m8(
+            __riscv_vfmul_vv_f32m8(vx, viln2_8, vl), vl);
         asm volatile("csrw frm, %0" :: "r"(old_frm));
 
-        // r = x - k*ln2
-        vfloat32m8_t vfk    = __riscv_vfcvt_f_x_v_f32m8(vk, vl);
-        vfloat32m8_t vkl2hi = __riscv_vfmul_vv_f32m8(vfk, vln2_hi_8, vl);
-        vfloat32m8_t vkl2lo = __riscv_vfmul_vv_f32m8(vfk, vln2_lo_8, vl);
-        vfloat32m8_t vr     = __riscv_vfsub_vv_f32m8(vx, vkl2hi, vl);
-        vr = __riscv_vfsub_vv_f32m8(vr, vkl2lo, vl);
+        // r = vx - k*ln2_hi - k*ln2_lo
+        vfloat32m8_t vfk = __riscv_vfcvt_f_x_v_f32m8(vk, vl);
+        vfloat32m8_t vr  = __riscv_vfsub_vv_f32m8(
+            __riscv_vfsub_vv_f32m8(vx,
+                __riscv_vfmul_vv_f32m8(vfk, vln2_hi_8, vl), vl),
+            __riscv_vfmul_vv_f32m8(vfk, vln2_lo_8, vl), vl);
 
-        // e^r 多项式（8阶 Horner）
-        vfloat32m8_t p = pc8_8;
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc7_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc6_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc5_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc4_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc3_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc2_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc1_8, vl);
-        p = __riscv_vfmadd_vv_f32m8(p, vr, pc0_8, vl);
+               // Horner：用 vrgather.vx 从 ptable 中按索引 0..8 取 C8..C0
+        vfloat32m8_t p = __riscv_vrgather_vx_f32m8(ptable, 0, vl); // C8
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 1, vl), vl); // +C7
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 2, vl), vl); // +C6
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 3, vl), vl); // +C5
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 4, vl), vl); // +C4
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 5, vl), vl); // +C3
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 6, vl), vl); // +C2
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 7, vl), vl); // +C1
+        p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 8, vl), vl); // +C0
 
-        // 2^k 重建
+        // 2^k
         const int exp_bias = 127;
-        vint32m8_t vbiased = __riscv_vadd_vx_i32m8(vk, exp_bias, vl);
-        vint32m8_t vexp2   = __riscv_vsll_vx_i32m8(vbiased, 23, vl);
-        vfloat32m8_t vf2k  = __riscv_vreinterpret_v_i32m8_f32m8(vexp2);
-
+        vfloat32m8_t vf2k = __riscv_vreinterpret_v_i32m8_f32m8(
+            __riscv_vsll_vx_i32m8(
+                __riscv_vadd_vx_i32m8(vk, exp_bias, vl), 23, vl));
         vfloat32m8_t vexp8 = __riscv_vfmul_vv_f32m8(p, vf2k, vl);
         __riscv_vse32_v_f32m8(dst, vexp8, vl);
 
-        // 块内求和（m8→m1），注意传 vl
+        // 块和
         vfloat32m1_t vblk = __riscv_vfredosum_vs_f32m8_f32m1(vexp8, vzero1, vl);
         vsum1 = __riscv_vfadd_vv_f32m1(vsum1, vblk, vl1);
 
         avl2 -= vl; src += vl; dst += vl;
     }
-
-    // inv(sum)（m1）+ 两次 NR
+    // 归一化
     vfloat32m1_t vsum1_eps = __riscv_vfadd_vv_f32m1(vsum1, veps1, vl1);
     vfloat32m1_t vinv1 = __riscv_vfrec7_v_f32m1(vsum1_eps, vl1);
-    vfloat32m1_t corr = __riscv_vfnmsac_vv_f32m1(vtwo1, vsum1_eps, vinv1, vl1); // 2 - d*x
+    vfloat32m1_t corr = __riscv_vfnmsac_vv_f32m1(vtwo1, vsum1_eps, vinv1, vl1);
     vinv1 = __riscv_vfmul_vv_f32m1(vinv1, corr, vl1);
     corr  = __riscv_vfnmsac_vv_f32m1(vtwo1, vsum1_eps, vinv1, vl1);
     vinv1 = __riscv_vfmul_vv_f32m1(vinv1, corr, vl1);
 
-    // 广播 inv(sum) 到 m8 并归一化
     uint32_t inv_bits[1];
     __riscv_vse32_v_u32m1(inv_bits, __riscv_vreinterpret_v_f32m1_u32m1(vinv1), vl1);
 
     dst = dst_orig;
-    size_t avl3 = n;
-    while (avl3 > 0) {
+    for (size_t avl3 = n; avl3 > 0; ) {
         size_t vl = __riscv_vsetvl_e32m8(avl3);
-        vfloat32m8_t row   = __riscv_vle32_v_f32m8(dst, vl);
-        vfloat32m8_t vinvB = __riscv_vreinterpret_v_u32m8_f32m8(__riscv_vmv_v_x_u32m8(inv_bits[0], vl));
+        vfloat32m8_t row = __riscv_vle32_v_f32m8(dst, vl);
+        vfloat32m8_t vinvB = __riscv_vreinterpret_v_u32m8_f32m8(
+            __riscv_vmv_v_x_u32m8(inv_bits[0], vl));
         row = __riscv_vfmul_vv_f32m8(row, vinvB, vl);
         __riscv_vse32_v_f32m8(dst, row, vl);
         avl3 -= vl; dst += vl;
@@ -238,10 +276,10 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     }
     dst = dst_orig;
 
-    // 调试打印
-    dbg_print_line("Final results:\n");
-    for (size_t i = 0; i < n; i++) {
-        dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
-        dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
-    }
+    // //调试打印
+    // dbg_print_line("Final results:\n");
+    // for (size_t i = 0; i < n; i++) {
+    //     dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
+    //     dbg_print_idx_hex32("golden", (uint32_t)i, "bits", load_f32_bits(&golden[i]));
+    // }
 }
