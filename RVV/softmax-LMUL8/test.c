@@ -114,6 +114,20 @@ int main(){
     //softmax_stable_rvv_fp32(dst, (float*)src, N);
     return 0;
 }
+// 用内存作为 vrgather.vi 的输出
+static inline vfloat32m8_t asm_vrgather_vi_f32m8_mem(vfloat32m8_t src, int imm, size_t vl) {
+    float buf[16] __attribute__((aligned(32))); // m8 最多16元素（VLEN=512）
+    __riscv_vse32_v_f32m8(buf, src, vl);
+    __asm__ volatile (
+        "vle32.v v24, (%0)\n"
+        "vrgather.vi v24, v25, %1\n"
+        "vse32.v v24, (%0)\n"
+        :
+        : "r"(buf), "I"(imm)
+        : "v24", "v25", "memory"
+    );
+    return __riscv_vle32_v_f32m8(buf, vl);
+}
 
 // 完全避免标量浮点寄存器的版本
 void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
@@ -219,6 +233,7 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
                 __riscv_vfmul_vv_f32m8(vfk, vln2_hi_8, vl), vl),
             __riscv_vfmul_vv_f32m8(vfk, vln2_lo_8, vl), vl);
 
+
                // Horner：用 vrgather.vx 从 ptable 中按索引 0..8 取 C8..C0
         //vfloat32m8_t p = __riscv_vrgather_vx_f32m8(ptable, 0, vl); // C8
         // p = __riscv_vfmadd_vv_f32m8(p, vr, __riscv_vrgather_vx_f32m8(ptable, 1, vl), vl); // +C7
@@ -299,8 +314,13 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     for (size_t avl3 = n; avl3 > 0; ) {
         size_t vl = __riscv_vsetvl_e32m8(avl3);
         vfloat32m8_t row = __riscv_vle32_v_f32m8(dst, vl);
-        vfloat32m8_t vinvB = __riscv_vreinterpret_v_u32m8_f32m8(
-            __riscv_vmv_v_x_u32m8(inv_bits[0], vl));
+        //vfloat32m8_t vinvB = __riscv_vreinterpret_v_u32m8_f32m8(
+        //    __riscv_vmv_v_x_u32m8(inv_bits[0], vl));
+        uint32_t inv_table[1] = {inv_bits[0]};
+        vfloat32m8_t inv_vec = __riscv_vreinterpret_v_u32m8_f32m8(
+            __riscv_vle32_v_u32m8(inv_table, 1));
+    // 用 vrgather.vi 广播 inv_bits[0] 到所有 lane
+        vfloat32m8_t vinvB = asm_vrgather_vi_f32m8_mem(inv_vec, 0, vl);
         row = __riscv_vfmul_vv_f32m8(row, vinvB, vl);
         __riscv_vse32_v_f32m8(dst, row, vl);
         avl3 -= vl; dst += vl;
@@ -317,7 +337,7 @@ void softmax_stable_rvv_fp32(float* dst, float* src, size_t n)
     }
     dst = dst_orig;
 
-    // //调试打印
+    //调试打印
     // dbg_print_line("Final results:\n");
     // for (size_t i = 0; i < n; i++) {
     //     dbg_print_idx_hex32("dst", (uint32_t)i, "bits", load_f32_bits(&dst_orig[i]));
